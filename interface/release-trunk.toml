@@ -1,6 +1,4 @@
 [build]
 target = "index.html"
 release = true
-dist = "../_site"
 minify = "on_release"
-public_url = "geotemporal_origin"
