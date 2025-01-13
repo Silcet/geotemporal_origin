@@ -37,7 +37,7 @@ jobs:
           tool: trunk
           locked: true
       - name: Build with trunk
-        run: trunk -v build --dist ./_site ./interface/index.html
+        run: pwd && ls && trunk -v build --dist ./_site ./interface/index.html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
