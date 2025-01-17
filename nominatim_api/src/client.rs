@@ -1,6 +1,7 @@
-use crate::{search::SearchParameters, Coordinate, Error};
-
-use json;
+use crate::{
+    parameters::{ReverseParameters, ReverseResponse, SearchParameters, SearchResponse},
+    Coordinate, Error,
+};
 
 pub struct Client {
     client: reqwest::Client,
@@ -23,42 +24,78 @@ impl Client {
             .get(format!("{}/search", self.base_url))
             .query(parameters)
             .build()?;
-        println!("{:?}", request);
-        println!("{:?}", request.url());
         let response = self.client.execute(request).await?;
+        let search_response = response.json::<SearchResponse>().await?;
 
-        let text = response.text().await?;
-        println!("{}", text);
-        let response_body = json::parse(text.as_str())?;
-
-        // Ugly parsing of response here. We should deserialize
-        let response_coordinates = &response_body["features"][0]["geometry"]["coordinates"];
-
-        if response_coordinates.is_null() {
-            return Err(Error::Parsing(json::JsonError::UnexpectedEndOfJson));
+        if search_response.features.is_empty() {
+            return Err(Error::Parsing(
+                "The search response contained no features".into(),
+            ));
         }
 
-        let mut coordinates = response_coordinates.members();
+        let geometry_coordinates = &search_response
+            .features
+            .first()
+            .unwrap()
+            .geometry
+            .coordinates;
+
+        if geometry_coordinates.len() != 2 {
+            return Err(Error::Parsing(format!(
+                "The search response provided an invalid number of coordinates {}",
+                geometry_coordinates.len()
+            )));
+        }
+
         Ok(Coordinate {
-            latitude: coordinates
-                .next()
-                .ok_or(Error::Parsing(json::JsonError::wrong_type(
-                    "Invalid coordinate length in API Response",
-                )))?
-                .as_f32()
-                .ok_or(Error::Parsing(json::JsonError::wrong_type(
-                    "Failed parsing coordinate from API",
-                )))?,
-            longitude: coordinates
-                .next()
-                .ok_or(Error::Parsing(json::JsonError::wrong_type(
-                    "Invalid coordinate length in API Response",
-                )))?
-                .as_f32()
-                .ok_or(Error::Parsing(json::JsonError::wrong_type(
-                    "Failed parsing coordinate from API",
-                )))?,
+            lat: geometry_coordinates[1],
+            lon: geometry_coordinates[0],
         })
+    }
+
+    pub async fn reverse(&self, parameters: &ReverseParameters) -> Result<(String, String), Error> {
+        let request = self
+            .client
+            .get(format!("{}/reverse", self.base_url))
+            .query(parameters)
+            .build()?;
+        let response = self.client.execute(request).await?;
+
+        let reverse_response = response.json::<ReverseResponse>().await?;
+
+        if reverse_response.features.is_empty() {
+            return Err(Error::Parsing(
+                "The reverse response contained no features".into(),
+            ));
+        }
+
+        let geocoding = &reverse_response
+            .features
+            .first()
+            .unwrap()
+            .properties
+            .geocoding;
+
+        if geocoding.contains_key("name") && geocoding.contains_key("country") {
+            return Ok((
+                geocoding["name"]
+                    .as_str()
+                    .ok_or(Error::Parsing(
+                        "The reverse response returned an invalid name".into(),
+                    ))?
+                    .into(),
+                geocoding["country"]
+                    .as_str()
+                    .ok_or(Error::Parsing(
+                        "The reverse response returned an invalid name".into(),
+                    ))?
+                    .into(),
+            ));
+        }
+
+        Err(Error::Parsing(
+            "The reverse response did not contain the name or country".into(),
+        ))
     }
 }
 
@@ -98,9 +135,28 @@ mod tests {
         assert!(search_result.is_ok());
 
         let expected_coordinates = Coordinate {
-            latitude: 10.210985,
-            longitude: 56.1518,
+            lon: 10.210985,
+            lat: 56.1518,
         };
         assert_eq!(search_result.unwrap(), expected_coordinates);
+    }
+
+    #[tokio::test]
+    async fn reverse_test() {
+        let client = Client::new(BASE_URL, EMAIL);
+
+        let coordinates = ReverseParameters {
+            lon: 10.210985,
+            lat: 56.1518,
+            email: EMAIL.into(),
+            format: "geocodejson".into(),
+            zoom: 10,
+        };
+
+        let reverse_result = client.reverse(&coordinates).await;
+        assert!(reverse_result.is_ok());
+
+        let expected_response = ("Aarhus".to_string(), "Danmark".to_string());
+        assert_eq!(reverse_result.unwrap(), expected_response);
     }
 }

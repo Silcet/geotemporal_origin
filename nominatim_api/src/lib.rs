@@ -1,19 +1,20 @@
 mod client;
-mod search;
+mod parameters;
 
 use reqwest;
+use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Error calling nominatim API")]
     API(#[from] reqwest::Error),
-    #[error("Error parsing API response")]
-    Parsing(#[from] json::Error),
+    #[error("Deserializing error: {0}")]
+    Parsing(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct Coordinate {
-    latitude: f32,
-    longitude: f32,
+    lat: f32,
+    lon: f32,
 }
