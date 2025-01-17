@@ -1,4 +1,4 @@
 [workspace]
 
-members = ["interface"]
+members = ["interface", "nominatim_api"]
 resolver = "2"
