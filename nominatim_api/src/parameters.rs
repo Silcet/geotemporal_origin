@@ -1,25 +1,20 @@
+use crate::{Coordinates, Location};
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::Coordinate;
-
-// TODO: Turn into builder pattern
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 pub struct SearchParameters {
-    pub street: String,
-    pub city: String,
-    pub county: Option<String>,
-    pub state: Option<String>,
-    pub country: String,
-    pub postalcode: Option<u16>,
+    #[serde(flatten)]
+    pub location: Location,
     pub email: String,
     pub format: String,
 }
 
 #[derive(Serialize)]
 pub struct ReverseParameters {
-    pub lat: f32,
-    pub lon: f32,
+    #[serde(flatten)]
+    pub coordinates: Coordinates,
     pub email: String,
     pub format: String,
     pub zoom: u8,
@@ -63,16 +58,4 @@ pub struct ReverseResponse {
     geocoding: HashMap<String, String>,
 
     pub features: Vec<Features>,
-}
-
-impl ReverseParameters {
-    pub fn new(coordinates: Coordinate, email: String, format: String, zoom: u8) -> Self {
-        Self {
-            lat: coordinates.lat,
-            lon: coordinates.lon,
-            email,
-            format,
-            zoom,
-        }
-    }
 }

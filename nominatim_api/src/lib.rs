@@ -1,5 +1,5 @@
-mod client;
-mod parameters;
+pub mod client;
+pub mod parameters;
 
 use reqwest;
 use serde::Serialize;
@@ -11,10 +11,22 @@ pub enum Error {
     API(#[from] reqwest::Error),
     #[error("Deserializing error: {0}")]
     Parsing(String),
+    #[error("Error parsing url")]
+    UrlParsing(#[from] url::ParseError),
 }
 
 #[derive(Debug, PartialEq, Serialize)]
-pub struct Coordinate {
+pub struct Coordinates {
     lat: f32,
     lon: f32,
+}
+
+#[derive(Serialize, Default, Clone)]
+pub struct Location {
+    pub street: String,
+    pub city: String,
+    pub county: Option<String>,
+    pub state: Option<String>,
+    pub country: String,
+    pub postalcode: Option<u16>,
 }
