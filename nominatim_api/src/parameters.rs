@@ -7,7 +7,6 @@ use std::collections::HashMap;
 pub struct SearchParameters {
     #[serde(flatten)]
     pub location: Location,
-    pub email: String,
     pub format: String,
 }
 
@@ -15,7 +14,6 @@ pub struct SearchParameters {
 pub struct ReverseParameters {
     #[serde(flatten)]
     pub coordinates: Coordinates,
-    pub email: String,
     pub format: String,
     pub zoom: u8,
 }

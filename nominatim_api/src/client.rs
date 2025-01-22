@@ -1,20 +1,20 @@
 use crate::{
     parameters::{ReverseParameters, ReverseResponse, SearchParameters, SearchResponse},
-    Coordinates, Error, Location,
+    Coordinates, Location, NominatimError, Result,
 };
 use reqwest::Url;
 
 pub struct Client {
     client: reqwest::Client,
     base_url: Url,
-    email: String,
+    referer: String,
     format: String,
     zoom: u8,
 }
 
 pub struct ClientBuilder {
     base_url: Option<Url>,
-    email: Option<String>,
+    referer: String,
     format: String,
     zoom: u8,
 }
@@ -23,7 +23,7 @@ impl Default for ClientBuilder {
     fn default() -> Self {
         Self {
             base_url: None,
-            email: None,
+            referer: "http://silcet.github.io/geotemporal_origin/".into(),
             format: "geocodejson".into(),
             zoom: 10, // Zoom 10 means city
         }
@@ -36,8 +36,8 @@ impl ClientBuilder {
         self
     }
 
-    pub fn email(&mut self, email: String) -> &mut Self {
-        self.email = Some(email);
+    pub fn referer(&mut self, referer: String) -> &mut Self {
+        self.referer = referer;
         self
     }
 
@@ -56,7 +56,7 @@ impl ClientBuilder {
         Client {
             client: client_builder,
             base_url: self.base_url.clone().expect("Please provide a base url"),
-            email: self.email.clone().expect("Please provide an email"),
+            referer: self.referer.clone(),
             format: self.format.clone(),
             zoom: self.zoom,
         }
@@ -68,23 +68,26 @@ impl Client {
         ClientBuilder::default()
     }
 
-    pub async fn search(&self, location: Location) -> Result<Coordinates, Error> {
+    pub async fn search(&self, location: Location) -> Result<Coordinates> {
         let parameters = SearchParameters {
             location: location,
-            email: self.email.clone(),
             format: self.format.clone(),
         };
 
         let request = self
             .client
             .get(self.base_url.join("/search")?)
+            .header(
+                reqwest::header::REFERER,
+                reqwest::header::HeaderValue::from_str(&self.referer)?,
+            )
             .query(&parameters)
             .build()?;
         let response = self.client.execute(request).await?;
         let search_response = response.json::<SearchResponse>().await?;
 
         if search_response.features.is_empty() {
-            return Err(Error::Parsing(
+            return Err(NominatimError::Parsing(
                 "The search response contained no features".into(),
             ));
         }
@@ -97,29 +100,26 @@ impl Client {
             .coordinates;
 
         if geometry_coordinates.len() != 2 {
-            return Err(Error::Parsing(format!(
+            return Err(NominatimError::Parsing(format!(
                 "The search response provided an invalid number of coordinates {}",
                 geometry_coordinates.len()
             )));
         }
 
-        Ok(Coordinates {
-            lat: geometry_coordinates[1],
-            lon: geometry_coordinates[0],
-        })
+        // The api provides first longitude then latitude
+        Coordinates::try_new(geometry_coordinates[1], geometry_coordinates[0])
     }
 
-    pub async fn search_list(&self, locations: Vec<Location>) -> Result<Vec<Coordinates>, Error> {
+    pub async fn search_list(&self, locations: Vec<Location>) -> Result<Vec<Coordinates>> {
         futures::future::join_all(locations.into_iter().map(|location| self.search(location)))
             .await
             .into_iter()
             .collect()
     }
 
-    pub async fn reverse(&self, coordinates: Coordinates) -> Result<(String, String), Error> {
+    pub async fn reverse(&self, coordinates: Coordinates) -> Result<(String, String)> {
         let parameters = ReverseParameters {
             coordinates: coordinates,
-            email: self.email.clone(),
             format: self.format.clone(),
             zoom: self.zoom,
         };
@@ -127,6 +127,10 @@ impl Client {
         let request = self
             .client
             .get(self.base_url.join("/reverse")?)
+            .header(
+                reqwest::header::REFERER,
+                reqwest::header::HeaderValue::from_str(&self.referer)?,
+            )
             .query(&parameters)
             .build()?;
         let response = self.client.execute(request).await?;
@@ -134,7 +138,7 @@ impl Client {
         let reverse_response = response.json::<ReverseResponse>().await?;
 
         if reverse_response.features.is_empty() {
-            return Err(Error::Parsing(
+            return Err(NominatimError::Parsing(
                 "The reverse response contained no features".into(),
             ));
         }
@@ -150,20 +154,20 @@ impl Client {
             return Ok((
                 geocoding["name"]
                     .as_str()
-                    .ok_or(Error::Parsing(
+                    .ok_or(NominatimError::Parsing(
                         "The reverse response returned an invalid name".into(),
                     ))?
                     .into(),
                 geocoding["country"]
                     .as_str()
-                    .ok_or(Error::Parsing(
+                    .ok_or(NominatimError::Parsing(
                         "The reverse response returned an invalid name".into(),
                     ))?
                     .into(),
             ));
         }
 
-        Err(Error::Parsing(
+        Err(NominatimError::Parsing(
             "The reverse response did not contain the name or country".into(),
         ))
     }
@@ -175,25 +179,17 @@ mod tests {
     use tokio;
 
     const BASE_URL: &'static str = "https://nominatim.openstreetmap.org/";
-    const EMAIL: &'static str = "user@company.com";
 
     #[test]
     fn client_construction() {
-        let client = Client::builder()
-            .base_url(BASE_URL.into())
-            .email(EMAIL.into())
-            .build();
+        let client = Client::builder().base_url(BASE_URL.into()).build();
 
         assert_eq!(BASE_URL, client.base_url.as_str());
-        assert_eq!(EMAIL, client.email);
     }
 
     #[tokio::test]
     async fn search_test() {
-        let client = Client::builder()
-            .base_url(BASE_URL.into())
-            .email(EMAIL.into())
-            .build();
+        let client = Client::builder().base_url(BASE_URL.into()).build();
 
         let location = Location {
             street: "Spanien 1".to_string(),
@@ -208,19 +204,13 @@ mod tests {
         println!("{:?}", search_result);
         assert!(search_result.is_ok());
 
-        let expected_coordinates = Coordinates {
-            lon: 10.210985,
-            lat: 56.1518,
-        };
+        let expected_coordinates = Coordinates::try_new(56.1518, 10.210985).unwrap();
         assert_eq!(search_result.unwrap(), expected_coordinates);
     }
 
     #[tokio::test]
     async fn search_list_test() {
-        let client = Client::builder()
-            .base_url(BASE_URL.into())
-            .email(EMAIL.into())
-            .build();
+        let client = Client::builder().base_url(BASE_URL.into()).build();
 
         let locations = vec![
             Location {
@@ -247,33 +237,18 @@ mod tests {
         assert!(search_result.is_ok());
 
         let expected_coordinates: Vec<Coordinates> = vec![
-            Coordinates {
-                lat: 56.1518,
-                lon: 10.210985,
-            },
-            Coordinates {
-                lat: 56.151714,
-                lon: 10.210944,
-            },
-            Coordinates {
-                lat: 56.149483,
-                lon: 10.20983,
-            },
+            Coordinates::try_new(56.1518, 10.210985).unwrap(),
+            Coordinates::try_new(56.151714, 10.210944).unwrap(),
+            Coordinates::try_new(56.149483, 10.20983).unwrap(),
         ];
         assert_eq!(search_result.unwrap(), expected_coordinates);
     }
 
     #[tokio::test]
     async fn reverse_test() {
-        let client = Client::builder()
-            .base_url(BASE_URL.into())
-            .email(EMAIL.into())
-            .build();
+        let client = Client::builder().base_url(BASE_URL.into()).build();
 
-        let coordinates = Coordinates {
-            lon: 10.210985,
-            lat: 56.1518,
-        };
+        let coordinates = Coordinates::try_new(56.1518, 10.210985).unwrap();
 
         let reverse_result = client.reverse(coordinates).await;
         assert!(reverse_result.is_ok());
