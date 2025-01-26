@@ -3,7 +3,7 @@ use crate::backend;
 use dioxus::prelude::*;
 
 #[derive(serde::Deserialize)]
-struct DogApi {
+pub struct DogApi {
     message: String,
 }
 
@@ -34,6 +34,17 @@ pub fn DogView() -> Element {
         div { id: "buttons",
             button { id: "skip", onclick: move |_| img_src.restart(), "skip" }
             button { id: "save", onclick: save, "save!" }
+        }
+    }
+}
+
+#[component]
+pub fn FavoriteDog(id: usize) -> Element {
+    let img_src = use_resource(move || async move { backend::get_dog(id).await.unwrap() });
+
+    rsx! {
+        div { id: "dogview",
+            img { src: img_src.cloned().unwrap_or_default() }
         }
     }
 }

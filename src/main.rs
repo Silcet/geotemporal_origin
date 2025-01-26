@@ -15,6 +15,9 @@ enum Route {
 
     #[route("/favorites")]
     Favorites,
+
+    #[route("/favorites/:id")]
+    FavoriteDog { id: usize },
 }
 
 fn main() {

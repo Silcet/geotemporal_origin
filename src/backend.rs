@@ -38,6 +38,19 @@ pub async fn list_dogs() -> Result<Vec<(usize, String)>, ServerFnError> {
 }
 
 #[server]
+pub async fn get_dog(id: usize) -> Result<String, ServerFnError> {
+    let dog = DB
+        .with(|f| {
+            f.query_row("SELECT url FROM dogs WHERE id = (?1)", &[&id], |row| {
+                row.get(0)
+            })
+        })
+        .unwrap();
+
+    Ok(dog)
+}
+
+#[server]
 pub async fn delete_dog(id: usize) -> Result<(), ServerFnError> {
     DB.with(|f| f.execute("DELETE FROM dogs WHERE id = (?1)", &[&id]))?;
     Ok(())

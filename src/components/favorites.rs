@@ -1,3 +1,5 @@
+use crate::Route;
+
 use dioxus::prelude::*;
 
 #[component]
@@ -10,7 +12,9 @@ pub fn Favorites() -> Element {
             div { id: "favorites-container",
                 for (id , url) in favorite_dogs().unwrap() {
                     div { key: id, class: "favorite-dog",
-                        img { src: "{url}" }
+                        Link { to: Route::FavoriteDog { id: id },
+                            img { src: "{url}" }
+                        }
                         button {
                             id: "delete-button",
                             onclick: move |_| async move {
