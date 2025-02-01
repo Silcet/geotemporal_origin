@@ -1,52 +1,39 @@
-use iced::widget::{button, column, text, Column};
+use dioxus::prelude::*;
 
-#[derive(Default)]
-struct Counter {
-    value: i64,
+use components::Navbar;
+use views::{Blog, Home};
+
+mod components;
+mod views;
+
+#[derive(Debug, Clone, Routable, PartialEq)]
+#[rustfmt::skip]
+enum Route {
+    #[layout(Navbar)]
+    #[route("/")]
+    Home {},
+    #[route("/blog/:id")]
+    Blog { id: i32 },
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Message {
-    Increment,
-    Decrement,
+const FAVICON: Asset = asset!("/assets/favicon.ico");
+const MAIN_CSS: Asset = asset!("/assets/styling/main.css");
+const BULMA_CSS: Asset = asset!("/assets/styling/bulma.min.css");
+
+fn main() {
+    dioxus::launch(App);
 }
 
-impl Counter {
-    fn update(&mut self, message: Message) {
-        match message {
-            Message::Increment => self.value += 1,
-            Message::Decrement => self.value -= 1,
-        }
-    }
+#[component]
+fn App() -> Element {
+    // Build cool things ✌️
 
-    fn view(&self) -> Column<Message> {
-        let increment = button("+").on_press(Message::Increment);
-        let decrement = button("-").on_press(Message::Decrement);
+    rsx! {
+        // Global app resources
+        document::Link { rel: "icon", href: FAVICON }
+        document::Link { rel: "stylesheet", href: BULMA_CSS }
 
-        let counter = text(self.value);
 
-        let interface = column![increment, counter, decrement];
-
-        interface
-    }
-}
-
-fn main() -> iced::Result {
-    iced::run("A cool counter", Counter::update, Counter::view)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_counting() {
-        let mut counter = Counter { value: 0 };
-
-        counter.update(Message::Increment);
-        counter.update(Message::Increment);
-        counter.update(Message::Decrement);
-
-        assert_eq!(counter.value, 1);
+        Router::<Route> {}
     }
 }
