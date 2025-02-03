@@ -1,4 +1,5 @@
-use nominatim_api::{client::Client, Coordinates, Location, Result};
+pub use nominatim_api::Location;
+use nominatim_api::{client::Client, Coordinates, Result};
 
 use std::iter::zip;
 

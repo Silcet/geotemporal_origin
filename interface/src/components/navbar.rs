@@ -9,6 +9,7 @@ pub fn Navbar() -> Element {
                 div { class: "navbar-start",
                     Link { class: "navbar-item", to: Route::Home {}, "Home" }
                     Link { class: "navbar-item", to: Route::Blog { id: 1 }, "Blog" }
+                    Link { class: "navbar-item", to: Route::InputForm { id: 1 }, "Input Form" }
                 }
             }
         }
